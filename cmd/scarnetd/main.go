@@ -1,8 +1,8 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -22,8 +22,38 @@ func NewServer() *Server {
 	}
 }
 
-type Connection struct {
-	conn net.Conn
+func (s *Server) CheckUserCredentials(req *scarnet.LoginRequest) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, ok := s.users[req.Username]; !ok {
+		slog.Info("no user exists:", "login", req.Username)
+		return false
+	}
+
+	if s.users[req.Username] == req.Password {
+		slog.Info("logged in user:", "login", req.Username)
+		return true
+	} else {
+		slog.Info("incorrect password:", "login", req.Username)
+	}
+
+	return false
+}
+
+func (s *Server) CreateUser(req *scarnet.SignupRequest) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.users[req.Username]; !ok {
+		s.users[req.Username] = req.Password
+		slog.Info("created user:", "signup", req.Username)
+		return true
+	} else {
+		slog.Info("user exists:", "signup", req.Username)
+	}
+
+	return false
 }
 
 func main() {
@@ -48,45 +78,27 @@ func main() {
 
 			for {
 				request, err := scarnet.ReadExchange(conn)
-				if err == io.EOF {
-					slog.Info("disconnected:", conn.RemoteAddr().String())
-					break
-				}
+
 				if err != nil {
-					slog.Error("read request error:", err)
-					break
-				}
-
-				if val, ok := request.(*scarnet.SignupRequest); ok {
-					//server.mu.Lock()
-					//defer server.mu.Unlock()
-
-					if _, ok := server.users[val.Username]; !ok {
-						server.users[val.Username] = val.Password
-						slog.Info("created user:", "signup", val.Username)
+					if errors.Is(err, scarnet.ErrUserDisconnected) {
+						slog.Info("user disconnected:", "loop", conn.RemoteAddr().String())
+						break
 					} else {
-						slog.Info("user exists:", "signup", val.Username)
+						slog.Error("read request error:", err)
+						break
 					}
 				}
 
-				if val, ok := request.(*scarnet.LoginRequest); ok {
-					//server.mu.RLock()
-					//defer server.mu.RUnlock()
-
-					if _, ok := server.users[val.Username]; !ok {
-						slog.Info("no user exists:", "login", val.Username)
-						continue
-					}
-
-					if server.users[val.Username] == val.Password {
-						slog.Info("logged in user:", "login", val.Username)
-					} else {
-						slog.Info("incorrect password:", "login", val.Username)
-					}
+				if req, ok := request.(*scarnet.SignupRequest); ok {
+					server.CreateUser(req)
 				}
 
-				if val, ok := request.(*scarnet.MessageRequest); ok {
-					slog.Info("message:", "message", val.Message)
+				if req, ok := request.(*scarnet.LoginRequest); ok {
+					server.CheckUserCredentials(req)
+				}
+
+				if req, ok := request.(*scarnet.MessageRequest); ok {
+					slog.Info("message:", "message", req.Message)
 				}
 			}
 		}(conn)
