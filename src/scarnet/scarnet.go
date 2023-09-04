@@ -11,124 +11,146 @@ import (
 )
 
 var (
-	_ Request = &SignupRequest{} // compile time proof
-	_ Request = &LoginRequest{}  // compile time proof
+	_ Exchange = &SignupRequest{} // compile time proof
+	_ Exchange = &LoginRequest{}  // compile time proof
 )
 
 const (
-	ActionSignup = iota
-	ActionLogin
-	ActionMessage
+	ExchangeIdSignupRequest ExchangeId = iota
+	ExchangeIdLoginRequest
+	ExchangeIdMessageRequest
 )
 
-type Request interface {
-	ActionCode() uint32
+type ExchangeId uint32
+
+type Exchange interface {
+	ExchangeId() ExchangeId
 }
 
 type SignupRequest struct {
-	Creds AccountCredentials
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-func (r *SignupRequest) ActionCode() uint32 {
-	return ActionSignup
+func (r *SignupRequest) ExchangeId() ExchangeId {
+	return ExchangeIdSignupRequest
 }
 
 type LoginRequest struct {
-	Creds AccountCredentials
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-func (r *LoginRequest) ActionCode() uint32 {
-	return ActionLogin
+func (r *LoginRequest) ExchangeId() ExchangeId {
+	return ExchangeIdLoginRequest
 }
 
 type MessageRequest struct {
-	Receiver string
-	Message  string
+	Receiver string `json:"to"`
+	Message  string `json:"msg"`
 }
 
-func (r *MessageRequest) ActionCode() uint32 {
-	return ActionMessage
+func (r *MessageRequest) ExchangeId() ExchangeId {
+	return ExchangeIdMessageRequest
 }
 
-type AccountCredentials struct {
-	Username string
-	Password string
-}
-
-func ReadRequest(conn net.Conn) (Request, error) {
+func ReadExchange(conn net.Conn) (Exchange, error) {
+	// read exchange id
 	buffer := make([]byte, 4)
 	_, err := io.ReadFull(conn, buffer)
 	if err != nil {
 		slog.Error("read error in connection handler:", err)
 		return nil, err
 	}
-	msgLen := binary.BigEndian.Uint32(buffer)
+	exchangeId := ExchangeId(binary.BigEndian.Uint32(buffer))
 
-	buffer = make([]byte, msgLen + 4)
+	// read data length
+	_, err = io.ReadFull(conn, buffer)
+	if err != nil {
+		slog.Error("read error in connection handler:", err)
+		return nil, err
+	}
+	dataLen := binary.BigEndian.Uint32(buffer)
+
+	// read data
+	buffer = make([]byte, dataLen)
 	_, err = io.ReadFull(conn, buffer)
 	if err != nil {
 		slog.Error("read error in connection handler:", err)
 		return nil, err
 	}
 
-	var request Request
-	action := binary.BigEndian.Uint32(buffer[:4])
-	switch action {
-	case ActionSignup:
+	var exchange Exchange
+	switch exchangeId {
+	case ExchangeIdSignupRequest:
 		var signupRequest SignupRequest
-		err := json.Unmarshal(buffer[4:], &signupRequest)
+		err := json.Unmarshal(buffer, &signupRequest)
 		if err != nil {
-			slog.Error("json unmarshal error:", err)
+			slog.Error("json unmarshal error:", "signup", err)
+			return nil, err
 		}
-		request = &signupRequest
-	case ActionLogin:
+		exchange = &signupRequest
+	case ExchangeIdLoginRequest:
 		var loginRequest LoginRequest
-		err := json.Unmarshal(buffer[4:], &loginRequest)
+		err := json.Unmarshal(buffer, &loginRequest)
 		if err != nil {
-			slog.Error("json unmarshal error:", err)
+			slog.Error("json unmarshal error:", "login", err)
+			return nil, err
 		}
-		request = &loginRequest
-	case ActionMessage:
+		exchange = &loginRequest
+	case ExchangeIdMessageRequest:
 		var messageRequest MessageRequest
-		err := json.Unmarshal(buffer[4:], &messageRequest)
+		err := json.Unmarshal(buffer, &messageRequest)
 		if err != nil {
-			slog.Error("json unmarshal error:", err)
+			slog.Error("json unmarshal error:", "message", err)
+			return nil, err
 		}
-		request = &messageRequest
+		exchange = &messageRequest
 	default:
-		slog.Error("unknown action error:", action)
-		return nil, fmt.Errorf("unknwon action error: %d", action)
+		slog.Error("unknown action error:", exchangeId)
+		return nil, fmt.Errorf("unknwon action error: %d", exchangeId)
 	}
 
-	return request, nil
+	return exchange, nil
 }
 
-func WriteRequest(conn net.Conn, request Request) error {
+func WriteExchange(conn net.Conn, exchange Exchange) error {
 	var err error
 	var data []byte
 
-	switch request.ActionCode() {
-	case ActionSignup:
-		data, err = json.Marshal(request.(*SignupRequest))
+	switch exchange.ExchangeId() {
+	case ExchangeIdSignupRequest:
+		data, err = json.Marshal(exchange.(*SignupRequest))
 		if err != nil {
 			slog.Error("json unmarshal error:", err)
 			return err
 		}
-	case ActionLogin:
-		data, err = json.Marshal(request.(*LoginRequest))
+	case ExchangeIdLoginRequest:
+		data, err = json.Marshal(exchange.(*LoginRequest))
 		if err != nil {
 			slog.Error("json unmarshal error:", err)
 			return err
 		}
-	case ActionMessage:
-		data, err = json.Marshal(request.(*MessageRequest))
+	case ExchangeIdMessageRequest:
+		data, err = json.Marshal(exchange.(*MessageRequest))
 		if err != nil {
 			slog.Error("json unmarshal error:", err)
 			return err
 		}
+	default:
+		slog.Error("unknown exchange id:", exchange.ExchangeId())
 	}
 
+	// write exchange id
 	buffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(buffer, uint32(exchange.ExchangeId()))
+	_, err = conn.Write(buffer)
+	if err != nil {
+		slog.Error("write error in connection handler:", err)
+		return err
+	}
+
+	// write data length
 	binary.BigEndian.PutUint32(buffer, uint32(len(data)))
 	_, err = conn.Write(buffer)
 	if err != nil {
@@ -136,13 +158,7 @@ func WriteRequest(conn net.Conn, request Request) error {
 		return err
 	}
 
-	binary.BigEndian.PutUint32(buffer, request.ActionCode())
-	_, err = conn.Write(buffer)
-	if err != nil {
-		slog.Error("write error in connection handler:", err)
-		return err
-	}
-
+	// write data
 	_, err = conn.Write(data)
 	if err != nil {
 		slog.Error("write error in connection handler:", err)

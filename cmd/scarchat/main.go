@@ -17,5 +17,46 @@ func main() {
 
 	fmt.Printf("connection to %s\n", conn.RemoteAddr().String())
 
-	scarnet.WriteRequest(conn, &scarnet.SignupRequest{Creds: scarnet.AccountCredentials{Username: "username", Password: "password"}})
+	err = scarnet.WriteExchange(conn, &scarnet.SignupRequest{
+		Username: "username",
+		Password: "password",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = scarnet.WriteExchange(conn, &scarnet.LoginRequest{
+		Username: "username",
+		Password: "password",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = scarnet.WriteExchange(conn, &scarnet.LoginRequest{
+		Username: "username",
+		Password: "passwo",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = scarnet.WriteExchange(conn, &scarnet.LoginRequest{
+		Username: "userna",
+		Password: "password",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = scarnet.WriteExchange(conn, &scarnet.SignupRequest{
+		Username: "username",
+		Password: "password",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = scarnet.WriteExchange(conn, &scarnet.MessageRequest{
+		Receiver: "username",
+		Message:  "hello from sender",
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
 }
