@@ -2,6 +2,12 @@ package scarnet
 
 import "encoding/json"
 
+const (
+	ExchangeIdSignupRequest ExchangeId = iota
+	ExchangeIdLoginRequest
+	ExchangeIdMessageRequest
+)
+
 var (
 	_ Exchange = &SignupRequest{}  // compile time proof
 	_ Exchange = &LoginRequest{}   // compile time proof

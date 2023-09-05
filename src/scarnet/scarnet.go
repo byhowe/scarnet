@@ -11,12 +11,6 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-const (
-	ExchangeIdSignupRequest ExchangeId = iota
-	ExchangeIdLoginRequest
-	ExchangeIdMessageRequest
-)
-
 func checkIoError(err error) error {
 	if err == io.EOF {
 		return scarerror.ErrUserDisconnected
@@ -71,8 +65,7 @@ func ReadExchange(conn net.Conn) (Exchange, error) {
 		}
 		exchange = &messageRequest
 	default:
-		slog.Error("unknown action error:", exchangeId)
-		return nil, scarerror.ErrUnknown.Wrap(fmt.Errorf("unknwon action error: %d", exchangeId))
+		return nil, scarerror.ErrUnknown.Wrap(fmt.Errorf("unknwon exchange id: %d", exchangeId))
 	}
 
 	return exchange, nil
