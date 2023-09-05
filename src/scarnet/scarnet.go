@@ -17,38 +17,6 @@ const (
 	ExchangeIdMessageRequest
 )
 
-type ExchangeId uint32
-
-type Exchange interface {
-	ExchangeId() ExchangeId
-}
-
-type SignupRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-func (r *SignupRequest) ExchangeId() ExchangeId {
-	return ExchangeIdSignupRequest
-}
-
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-func (r *LoginRequest) ExchangeId() ExchangeId {
-	return ExchangeIdLoginRequest
-}
-
-type MessageRequest struct {
-	Receiver string `json:"to"`
-	Message  string `json:"msg"`
-}
-
-func (r *MessageRequest) ExchangeId() ExchangeId {
-	return ExchangeIdMessageRequest
-}
 func checkIoError(err error) error {
 	if err == io.EOF {
 		return scarerror.ErrUserDisconnected
@@ -114,22 +82,9 @@ func WriteExchange(conn net.Conn, exchange Exchange) error {
 	var err error
 	var data []byte
 
-	switch exchange.ExchangeId() {
-	case ExchangeIdSignupRequest:
-		data, err = json.Marshal(exchange.(*SignupRequest))
-		if err != nil {
-			return ErrSerialization.Wrap(err)
-		}
-	case ExchangeIdLoginRequest:
-		data, err = json.Marshal(exchange.(*LoginRequest))
-		if err != nil {
-			return ErrSerialization.Wrap(err)
-		}
-	case ExchangeIdMessageRequest:
-		data, err = json.Marshal(exchange.(*MessageRequest))
-		if err != nil {
-			return ErrSerialization.Wrap(err)
-		}
+	data, err = exchange.Marshal()
+	if err != nil {
+		return scarerror.ErrSerialization.Wrap(err)
 	}
 
 	// write exchange id
