@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/byhowe/scarnet/src/scarerror"
 	"github.com/byhowe/scarnet/src/scarnet"
 	"golang.org/x/exp/slog"
 )
@@ -80,7 +81,7 @@ func main() {
 				request, err := scarnet.ReadExchange(conn)
 
 				if err != nil {
-					if errors.Is(err, scarnet.ErrUserDisconnected) {
+					if errors.Is(err, scarerror.ErrUserDisconnected) {
 						slog.Info("user disconnected:", "loop", conn.RemoteAddr().String())
 						break
 					} else {

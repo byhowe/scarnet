@@ -7,18 +7,8 @@ import (
 	"io"
 	"net"
 
+	"github.com/byhowe/scarnet/src/scarerror"
 	"golang.org/x/exp/slog"
-)
-
-var (
-	_ Exchange = &SignupRequest{}  // compile time proof
-	_ Exchange = &LoginRequest{}   // compile time proof
-	_ Exchange = &MessageRequest{} // compile time proof
-)
-
-var (
-	_ error     = (*Error)(nil) // compile time proof
-	_ ScarError = (*Error)(nil) // compile time proof
 )
 
 const (
@@ -26,55 +16,6 @@ const (
 	ExchangeIdLoginRequest
 	ExchangeIdMessageRequest
 )
-
-var (
-	ErrUserDisconnected = NewError("user disconnected", false)
-	ErrIo               = NewError("io error", true)
-	ErrSerialization    = NewError("io error", true)
-	ErrUnknown          = NewError("io error", true)
-)
-
-type ScarError interface {
-	Wrap(err error) ScarError
-	Unwrap() error
-	SetData(any) ScarError
-	Error() string
-}
-
-type Error struct {
-	Err      error
-	Message  string
-	Data     any
-	Loggable bool
-}
-
-func (e *Error) Wrap(err error) ScarError {
-	e.Err = err
-	return e
-}
-
-func (e *Error) Unwrap() error {
-	return e.Err
-}
-
-func (e *Error) SetData(data any) ScarError {
-	e.Data = data
-	return e
-}
-
-func (e *Error) Error() string {
-	if e.Err != nil {
-		return e.Err.Error() + ", " + e.Message
-	}
-	return e.Message
-}
-
-func NewError(msg string, loggable bool) *Error {
-	return &Error{
-		Message:  msg,
-		Loggable: loggable,
-	}
-}
 
 type ExchangeId uint32
 
@@ -108,12 +49,11 @@ type MessageRequest struct {
 func (r *MessageRequest) ExchangeId() ExchangeId {
 	return ExchangeIdMessageRequest
 }
-
 func checkIoError(err error) error {
 	if err == io.EOF {
-		return ErrUserDisconnected
+		return scarerror.ErrUserDisconnected
 	}
-	return ErrIo.Wrap(err)
+	return scarerror.ErrIo.Wrap(err)
 }
 
 func ReadExchange(conn net.Conn) (Exchange, error) {
@@ -145,26 +85,26 @@ func ReadExchange(conn net.Conn) (Exchange, error) {
 		var signupRequest SignupRequest
 		err := json.Unmarshal(buffer, &signupRequest)
 		if err != nil {
-			return nil, ErrSerialization.Wrap(err)
+			return nil, scarerror.ErrSerialization.Wrap(err)
 		}
 		exchange = &signupRequest
 	case ExchangeIdLoginRequest:
 		var loginRequest LoginRequest
 		err := json.Unmarshal(buffer, &loginRequest)
 		if err != nil {
-			return nil, ErrSerialization.Wrap(err)
+			return nil, scarerror.ErrSerialization.Wrap(err)
 		}
 		exchange = &loginRequest
 	case ExchangeIdMessageRequest:
 		var messageRequest MessageRequest
 		err := json.Unmarshal(buffer, &messageRequest)
 		if err != nil {
-			return nil, ErrSerialization.Wrap(err)
+			return nil, scarerror.ErrSerialization.Wrap(err)
 		}
 		exchange = &messageRequest
 	default:
 		slog.Error("unknown action error:", exchangeId)
-		return nil, ErrUnknown.Wrap(fmt.Errorf("unknwon action error: %d", exchangeId))
+		return nil, scarerror.ErrUnknown.Wrap(fmt.Errorf("unknwon action error: %d", exchangeId))
 	}
 
 	return exchange, nil
