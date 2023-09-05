@@ -98,7 +98,7 @@ func WriteExchange(conn net.Conn, exchange Exchange) error {
 	// write data
 	_, err = conn.Write(data)
 	if err != nil {
-		slog.Error("write error in connection handler:", err)
+		slog.Error("write error in connection handler", "err", err)
 	}
 
 	return nil

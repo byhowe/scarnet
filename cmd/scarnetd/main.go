@@ -28,15 +28,15 @@ func (s *Server) CheckUserCredentials(req *scarnet.LoginRequest) bool {
 	defer s.mu.RUnlock()
 
 	if _, ok := s.users[req.Username]; !ok {
-		slog.Info("no user exists:", "login", req.Username)
+		slog.Info("no user exists", "username", req.Username)
 		return false
 	}
 
 	if s.users[req.Username] == req.Password {
-		slog.Info("logged in user:", "login", req.Username)
+		slog.Info("successful login", "username", req.Username)
 		return true
 	} else {
-		slog.Info("incorrect password:", "login", req.Username)
+		slog.Info("incorrect password", "username", req.Username)
 	}
 
 	return false
@@ -48,10 +48,10 @@ func (s *Server) CreateUser(req *scarnet.SignupRequest) bool {
 
 	if _, ok := s.users[req.Username]; !ok {
 		s.users[req.Username] = req.Password
-		slog.Info("created user:", "signup", req.Username)
+		slog.Info("created user", "username", req.Username)
 		return true
 	} else {
-		slog.Info("user exists:", "signup", req.Username)
+		slog.Info("user exists", "username", req.Username)
 	}
 
 	return false
@@ -60,7 +60,7 @@ func (s *Server) CreateUser(req *scarnet.SignupRequest) bool {
 func main() {
 	listener, err := net.Listen("tcp", ":20058")
 	if err != nil {
-		log.Fatal("create tcp listener error:", err)
+		log.Fatal("create tcp listener error", "err", err)
 	}
 
 	fmt.Printf("listening on %s\n", listener.Addr().String())
@@ -70,9 +70,9 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			slog.Error("failed to accept new conn:", err)
+			slog.Error("failed to accept new conn", "err", err)
 		}
-		slog.Info("connection accepted from:", conn.RemoteAddr().String())
+		slog.Info("connection accepted from", "addr", conn.RemoteAddr().String())
 
 		go func(conn net.Conn) {
 			defer conn.Close()
@@ -82,10 +82,10 @@ func main() {
 
 				if err != nil {
 					if errors.Is(err, scarerror.ErrUserDisconnected) {
-						slog.Info("user disconnected:", "loop", conn.RemoteAddr().String())
+						slog.Info("user disconnected", "addr", conn.RemoteAddr().String())
 						break
 					} else {
-						slog.Error("read request error:", err)
+						slog.Error("read request error", "err", err)
 						break
 					}
 				}
@@ -99,7 +99,7 @@ func main() {
 				}
 
 				if req, ok := request.(*scarnet.MessageRequest); ok {
-					slog.Info("message:", "message", req.Message)
+					slog.Info("message received", "msg", req.Message)
 				}
 			}
 		}(conn)
